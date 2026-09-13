@@ -3,13 +3,12 @@ import re
 import json
 import subprocess
 import requests
-
 from pathlib import Path
 from dotenv import load_dotenv
 
 
 # ============================================================
-# CONFIGURATION
+# LOAD CONFIGURATION
 # ============================================================
 
 load_dotenv()
@@ -18,142 +17,92 @@ USERNAME = os.getenv("LEETCODE_USERNAME")
 LEETCODE_SESSION = os.getenv("LEETCODE_SESSION")
 CSRF_TOKEN = os.getenv("LEETCODE_CSRF")
 
-# Your GitHub repository folder
 GITHUB_REPO_DIR = os.getenv(
     "GITHUB_REPO_DIR",
-    "."
+    r"C:\Users\farju\OneDrive\Desktop\lc\leetcode-github-sync"
 )
 
 GRAPHQL_URL = "https://leetcode.com/graphql/"
 
 
-# ============================================================
-# CHECK ENVIRONMENT
-# ============================================================
-
 if not USERNAME:
-    raise Exception(
-        "LEETCODE_USERNAME is missing from .env"
-    )
+    raise Exception("LEETCODE_USERNAME is missing from .env")
 
 if not LEETCODE_SESSION:
-    raise Exception(
-        "LEETCODE_SESSION is missing from .env"
-    )
+    raise Exception("LEETCODE_SESSION is missing from .env")
 
 
 # ============================================================
-# CREATE HTTP SESSION
+# LEETCODE SESSION
 # ============================================================
 
 session = requests.Session()
 
 session.headers.update({
-
     "Content-Type": "application/json",
-
-    "User-Agent":
+    "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 "
-        "(KHTML, like Gecko) "
-        "Chrome/153.0.0.0 Safari/537.36",
-
-    "Referer":
-        "https://leetcode.com/",
-
-    "Origin":
-        "https://leetcode.com"
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/153.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://leetcode.com/",
+    "Origin": "https://leetcode.com"
 })
-
 
 session.cookies.update({
-
-    "LEETCODE_SESSION":
-        LEETCODE_SESSION
+    "LEETCODE_SESSION": LEETCODE_SESSION
 })
 
-
 if CSRF_TOKEN:
-
     session.cookies.update({
-
-        "csrftoken":
-            CSRF_TOKEN
+        "csrftoken": CSRF_TOKEN
     })
 
     session.headers.update({
-
-        "x-csrftoken":
-            CSRF_TOKEN
+        "x-csrftoken": CSRF_TOKEN
     })
 
 
 # ============================================================
-# GRAPHQL FUNCTION
+# GRAPHQL REQUEST
 # ============================================================
 
 def graphql(query, variables=None, operation_name=None):
 
     payload = {
-
-        "query":
-            query,
-
-        "variables":
-            variables or {}
+        "query": query,
+        "variables": variables or {}
     }
 
     if operation_name:
-
         payload["operationName"] = operation_name
 
     try:
 
         response = session.post(
-
             GRAPHQL_URL,
-
             json=payload,
-
             timeout=30
         )
 
     except requests.RequestException as e:
 
-        print()
-        print("Network error:")
+        print("\nNetwork error:")
         print(e)
 
         return None
 
 
-    print(
-        "HTTP status:",
-        response.status_code
-    )
+    print("HTTP status:", response.status_code)
 
-
-    # --------------------------------------------------------
-    # HTTP ERROR
-    # --------------------------------------------------------
 
     if response.status_code != 200:
 
-        print()
-        print(
-            "LeetCode returned an HTTP error:"
-        )
-
-        print(
-            response.text[:3000]
-        )
+        print("\nLeetCode returned an HTTP error:")
+        print(response.text[:3000])
 
         return None
 
-
-    # --------------------------------------------------------
-    # JSON
-    # --------------------------------------------------------
 
     try:
 
@@ -161,29 +110,15 @@ def graphql(query, variables=None, operation_name=None):
 
     except Exception:
 
-        print()
-        print(
-            "LeetCode returned invalid JSON:"
-        )
-
-        print(
-            response.text[:3000]
-        )
+        print("\nLeetCode returned invalid JSON:")
+        print(response.text[:3000])
 
         return None
 
 
-    # --------------------------------------------------------
-    # GRAPHQL ERROR
-    # --------------------------------------------------------
-
     if "errors" in result:
 
-        print()
-        print(
-            "GraphQL error:"
-        )
-
+        print("\nGraphQL error:")
         print(
             json.dumps(
                 result["errors"],
@@ -194,9 +129,7 @@ def graphql(query, variables=None, operation_name=None):
         return None
 
 
-    return result.get(
-        "data"
-    )
+    return result.get("data")
 
 
 # ============================================================
@@ -206,7 +139,6 @@ def graphql(query, variables=None, operation_name=None):
 def get_recent_submissions():
 
     query = """
-
     query recentAcSubmissionList(
         $username: String!,
         $limit: Int!
@@ -223,45 +155,32 @@ def get_recent_submissions():
             timestamp
 
         }
-
     }
-
     """
 
-
     variables = {
-
-        "username":
-            USERNAME,
-
-        "limit":
-            20
+        "username": USERNAME,
+        "limit": 20
     }
 
 
     data = graphql(
-
         query,
-
         variables,
-
         "recentAcSubmissionList"
     )
 
 
     if not data:
-
         return []
 
 
     submissions = data.get(
-
         "recentAcSubmissionList"
     )
 
 
     if not submissions:
-
         return []
 
 
@@ -269,22 +188,18 @@ def get_recent_submissions():
 
 
 # ============================================================
-# GET ACTUAL SUBMITTED CODE
+# GET SUBMISSION DETAILS
 # ============================================================
 
 def get_submission_code(submission_id):
 
     query = """
-
     query submissionDetails(
         $submissionId: Int!
     ) {
 
         submissionDetails(
-
-            submissionId:
-                $submissionId
-
+            submissionId: $submissionId
         ) {
 
             id
@@ -299,7 +214,9 @@ def get_submission_code(submission_id):
 
             timestamp
 
-            lang
+            lang {
+                name
+            }
 
             question {
 
@@ -314,33 +231,24 @@ def get_submission_code(submission_id):
                 difficulty
 
             }
-
         }
-
     }
-
     """
 
 
     variables = {
-
-        "submissionId":
-            int(submission_id)
+        "submissionId": int(submission_id)
     }
 
 
     data = graphql(
-
         query,
-
         variables,
-
         "submissionDetails"
     )
 
 
     if not data:
-
         return None
 
 
@@ -356,7 +264,6 @@ def get_submission_code(submission_id):
 def get_question_info(slug):
 
     query = """
-
     query questionTitle(
         $titleSlug: String!
     ) {
@@ -376,41 +283,31 @@ def get_question_info(slug):
             difficulty
 
         }
-
     }
-
     """
 
 
     variables = {
-
-        "titleSlug":
-            slug
+        "titleSlug": slug
     }
 
 
     data = graphql(
-
         query,
-
         variables,
-
         "questionTitle"
     )
 
 
     if not data:
-
         return None
 
 
-    return data.get(
-        "question"
-    )
+    return data.get("question")
 
 
 # ============================================================
-# CLEAN NAME FOR FOLDER
+# CLEAN PROBLEM NAME
 # ============================================================
 
 def clean_name(name):
@@ -418,11 +315,8 @@ def clean_name(name):
     name = name.lower()
 
     name = re.sub(
-
         r"[^a-z0-9]+",
-
         "-",
-
         name
     )
 
@@ -432,82 +326,58 @@ def clean_name(name):
 
 
 # ============================================================
-# GET FILE EXTENSION
+# LANGUAGE -> FILE EXTENSION
 # ============================================================
 
 def get_extension(language):
 
     language = language.lower()
 
-
     mapping = {
 
-        "cpp":
-            "cpp",
+        "cpp": "cpp",
+        "c++": "cpp",
 
-        "c++":
-            "cpp",
+        "c": "c",
 
-        "c":
-            "c",
+        "java": "java",
 
-        "java":
-            "java",
+        "python": "py",
+        "python3": "py",
 
-        "python":
-            "py",
+        "javascript": "js",
 
-        "python3":
-            "py",
+        "typescript": "ts",
 
-        "javascript":
-            "js",
+        "go": "go",
 
-        "typescript":
-            "ts",
+        "rust": "rs",
 
-        "go":
-            "go",
+        "kotlin": "kt",
 
-        "rust":
-            "rs",
+        "swift": "swift",
 
-        "kotlin":
-            "kt",
+        "csharp": "cs",
 
-        "swift":
-            "swift",
+        "ruby": "rb",
 
-        "csharp":
-            "cs",
+        "php": "php",
 
-        "ruby":
-            "rb",
+        "scala": "scala",
 
-        "php":
-            "php",
+        "dart": "dart",
 
-        "scala":
-            "scala",
+        "mysql": "sql",
 
-        "dart":
-            "dart",
+        "mssql": "sql",
 
-        "mysql":
-            "sql",
+        "postgresql": "sql"
 
-        "mssql":
-            "sql",
-
-        "postgresql":
-            "sql"
     }
 
 
     return mapping.get(
-
         language,
-
         "txt"
     )
 
@@ -517,14 +387,12 @@ def get_extension(language):
 # ============================================================
 
 def create_problem_readme(
-
     folder,
     number,
     title,
     difficulty,
     language,
     slug
-
 ):
 
     content = f"""# {title}
@@ -538,24 +406,19 @@ def create_problem_readme(
 
     readme = folder / "README.md"
 
-
     readme.write_text(
-
         content,
-
         encoding="utf-8"
     )
 
 
 # ============================================================
-# PROCESS ONE ACCEPTED PROBLEM
+# PROCESS ONE PROBLEM
 # ============================================================
 
 def process_problem(recent_submission):
 
-    submission_id = recent_submission.get(
-        "id"
-    )
+    submission_id = recent_submission.get("id")
 
     slug = recent_submission.get(
         "titleSlug"
@@ -574,15 +437,9 @@ def process_problem(recent_submission):
     print()
     print("-" * 60)
 
-    print(
-        "Problem:",
-        title
-    )
+    print("Problem:", title)
 
-    print(
-        "Slug:",
-        slug
-    )
+    print("Slug:", slug)
 
     print(
         "Submission ID:",
@@ -591,7 +448,7 @@ def process_problem(recent_submission):
 
 
     # --------------------------------------------------------
-    # GET ACTUAL SUBMISSION DIRECTLY
+    # GET SUBMISSION DETAILS
     # --------------------------------------------------------
 
     details = get_submission_code(
@@ -626,17 +483,18 @@ def process_problem(recent_submission):
         return
 
 
+    print(
+        "Status:",
+        status
+    )
+
+
+    # --------------------------------------------------------
+    # GET CODE
+    # --------------------------------------------------------
+
     code = details.get(
         "code"
-    )
-
-    language = details.get(
-        "lang",
-        "unknown"
-    )
-
-    question = details.get(
-        "question"
     )
 
 
@@ -649,10 +507,27 @@ def process_problem(recent_submission):
         return
 
 
-    print(
-        "Status:",
-        status
+    # --------------------------------------------------------
+    # GET LANGUAGE
+    #
+    # IMPORTANT:
+    # LeetCode now returns lang as an object:
+    #
+    # lang {
+    #     name
+    # }
+    # --------------------------------------------------------
+
+    lang_info = details.get(
+        "lang"
+    ) or {}
+
+
+    language = lang_info.get(
+        "name",
+        "unknown"
     )
+
 
     print(
         "Language:",
@@ -661,8 +536,13 @@ def process_problem(recent_submission):
 
 
     # --------------------------------------------------------
-    # QUESTION INFO
+    # QUESTION INFORMATION
     # --------------------------------------------------------
+
+    question = details.get(
+        "question"
+    )
+
 
     if not question:
 
@@ -681,13 +561,10 @@ def process_problem(recent_submission):
 
 
     number = (
-
         question.get(
             "questionFrontendId"
         )
-
         or
-
         question.get(
             "questionId"
         )
@@ -695,33 +572,26 @@ def process_problem(recent_submission):
 
 
     title = question.get(
-
         "title",
-
         title
     )
 
 
     difficulty = question.get(
-
         "difficulty",
-
         "Unknown"
     )
 
 
     # --------------------------------------------------------
-    # FOLDER NAME
+    # CREATE FOLDER NAME
     # --------------------------------------------------------
 
     try:
 
-        number_int = int(
-            number
-        )
+        number_int = int(number)
 
         folder_name = (
-
             f"{number_int:04d}-"
             f"{clean_name(slug)}"
         )
@@ -732,14 +602,13 @@ def process_problem(recent_submission):
     ):
 
         folder_name = (
-
             f"{number}-"
             f"{clean_name(slug)}"
         )
 
 
     # --------------------------------------------------------
-    # GITHUB REPOSITORY
+    # REPOSITORY
     # --------------------------------------------------------
 
     repo_dir = Path(
@@ -751,40 +620,39 @@ def process_problem(recent_submission):
 
         print()
         print(
-            "GitHub repository directory does not exist:"
+            "ERROR: GitHub repository "
+            "directory does not exist:"
         )
 
-        print(
-            repo_dir
-        )
+        print(repo_dir)
 
         return
 
 
-    root = repo_dir / "leetcode"
+    root = (
+        repo_dir / "leetcode"
+    )
 
 
     root.mkdir(
-
         parents=True,
-
         exist_ok=True
     )
 
 
-    folder = root / folder_name
+    folder = (
+        root / folder_name
+    )
 
 
     folder.mkdir(
-
         parents=True,
-
         exist_ok=True
     )
 
 
     # --------------------------------------------------------
-    # FILE
+    # CREATE SOLUTION FILE
     # --------------------------------------------------------
 
     extension = get_extension(
@@ -793,14 +661,13 @@ def process_problem(recent_submission):
 
 
     solution_file = (
-
         folder /
         f"solution.{extension}"
     )
 
 
     # --------------------------------------------------------
-    # DON'T OVERWRITE
+    # DON'T OVERWRITE EXISTING SOLUTION
     # --------------------------------------------------------
 
     if solution_file.exists():
@@ -810,51 +677,37 @@ def process_problem(recent_submission):
             "Already exists:"
         )
 
-        print(
-            solution_file
-        )
+        print(solution_file)
 
         return
 
 
     # --------------------------------------------------------
-    # WRITE SOLUTION
+    # WRITE CODE
     # --------------------------------------------------------
 
     solution_file.write_text(
-
         code,
-
         encoding="utf-8"
     )
 
 
     print()
-    print(
-        "Created:"
-    )
+    print("Created:")
 
-    print(
-        solution_file
-    )
+    print(solution_file)
 
 
     # --------------------------------------------------------
-    # WRITE README
+    # CREATE README
     # --------------------------------------------------------
 
     create_problem_readme(
-
         folder,
-
         number,
-
         title,
-
         difficulty,
-
         language,
-
         slug
     )
 
@@ -875,10 +728,13 @@ def process_problem(recent_submission):
 def git_push(repo_dir):
 
     print()
+
     print("=" * 60)
+
     print(
         "        PUSHING TO GITHUB"
     )
+
     print("=" * 60)
 
 
@@ -889,17 +745,13 @@ def git_push(repo_dir):
         # ----------------------------------------------------
 
         result = subprocess.run(
-
             [
                 "git",
                 "rev-parse",
                 "--is-inside-work-tree"
             ],
-
             cwd=repo_dir,
-
             capture_output=True,
-
             text=True
         )
 
@@ -907,12 +759,11 @@ def git_push(repo_dir):
         if result.returncode != 0:
 
             print()
-            print(
-                "ERROR:"
-            )
+            print("ERROR:")
 
             print(
-                "This folder is not a Git repository."
+                "This folder is not "
+                "a Git repository."
             )
 
             return
@@ -923,17 +774,13 @@ def git_push(repo_dir):
         # ----------------------------------------------------
 
         result = subprocess.run(
-
             [
                 "git",
                 "status",
                 "--porcelain"
             ],
-
             cwd=repo_dir,
-
             capture_output=True,
-
             text=True
         )
 
@@ -941,6 +788,7 @@ def git_push(repo_dir):
         if not result.stdout.strip():
 
             print()
+
             print(
                 "Nothing new to push."
             )
@@ -953,21 +801,19 @@ def git_push(repo_dir):
         # ----------------------------------------------------
 
         print()
+
         print(
             "Adding files..."
         )
 
 
         subprocess.run(
-
             [
                 "git",
                 "add",
                 "."
             ],
-
             cwd=repo_dir,
-
             check=True
         )
 
@@ -982,16 +828,13 @@ def git_push(repo_dir):
 
 
         subprocess.run(
-
             [
                 "git",
                 "commit",
                 "-m",
                 "Add accepted LeetCode solutions"
             ],
-
             cwd=repo_dir,
-
             check=True
         )
 
@@ -1006,27 +849,27 @@ def git_push(repo_dir):
 
 
         subprocess.run(
-
             [
                 "git",
                 "push"
             ],
-
             cwd=repo_dir,
-
             check=True
         )
 
 
         print()
+
         print(
-            "Successfully pushed to GitHub! ✅"
+            "Successfully pushed "
+            "to GitHub! ✅"
         )
 
 
     except subprocess.CalledProcessError as e:
 
         print()
+
         print(
             "Git error:"
         )
@@ -1037,6 +880,7 @@ def git_push(repo_dir):
     except Exception as e:
 
         print()
+
         print(
             "Unexpected Git error:"
         )
@@ -1045,12 +889,13 @@ def git_push(repo_dir):
 
 
 # ============================================================
-# MAIN SYNC FUNCTION
+# MAIN SYNC
 # ============================================================
 
 def sync():
 
     print()
+
     print("=" * 60)
 
     print(
@@ -1061,6 +906,10 @@ def sync():
 
     print()
 
+
+    # --------------------------------------------------------
+    # GET RECENT ACCEPTED SUBMISSIONS
+    # --------------------------------------------------------
 
     print(
         "Checking LeetCode..."
@@ -1073,6 +922,7 @@ def sync():
     if not recent:
 
         print()
+
         print(
             "No accepted submissions found."
         )
@@ -1084,58 +934,29 @@ def sync():
 
     print(
         f"Found {len(recent)} "
-        "recent accepted submissions."
+        f"recent accepted submissions."
     )
 
 
     # --------------------------------------------------------
-    # PROCESS SUBMISSIONS
+    # PROCESS EACH SUBMISSION
     # --------------------------------------------------------
-
-    new_solution_found = False
-
 
     for submission in recent:
 
         try:
 
-            before = len(
-                list(
-                    (Path(GITHUB_REPO_DIR) / "leetcode").glob(
-                        "*"
-                    )
-                )
-            ) if (
-                Path(GITHUB_REPO_DIR) / "leetcode"
-            ).exists() else 0
-
-
             process_problem(
                 submission
             )
 
-
-            after = len(
-                list(
-                    (Path(GITHUB_REPO_DIR) / "leetcode").glob(
-                        "*"
-                    )
-                )
-            ) if (
-                Path(GITHUB_REPO_DIR) / "leetcode"
-            ).exists() else 0
-
-
-            if after > before:
-
-                new_solution_found = True
-
-
         except Exception as e:
 
             print()
+
             print(
-                "Error while processing problem:"
+                "Error while processing "
+                "problem:"
             )
 
             print(e)
@@ -1160,6 +981,7 @@ def sync():
 
 
     print()
+
     print("=" * 60)
 
     print(
@@ -1184,14 +1006,15 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
 
         print()
+
         print(
             "Sync cancelled."
         )
 
-
     except Exception as e:
 
         print()
+
         print("=" * 60)
 
         print(
