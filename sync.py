@@ -1,7 +1,9 @@
 import os
 import re
 import json
+import subprocess
 import requests
+
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -15,6 +17,12 @@ load_dotenv()
 USERNAME = os.getenv("LEETCODE_USERNAME")
 LEETCODE_SESSION = os.getenv("LEETCODE_SESSION")
 CSRF_TOKEN = os.getenv("LEETCODE_CSRF")
+
+# Your GitHub repository folder
+GITHUB_REPO_DIR = os.getenv(
+    "GITHUB_REPO_DIR",
+    "."
+)
 
 GRAPHQL_URL = "https://leetcode.com/graphql/"
 
@@ -98,7 +106,6 @@ def graphql(query, variables=None, operation_name=None):
     if operation_name:
 
         payload["operationName"] = operation_name
-
 
     try:
 
@@ -216,6 +223,7 @@ def get_recent_submissions():
             timestamp
 
         }
+
     }
 
     """
@@ -261,104 +269,6 @@ def get_recent_submissions():
 
 
 # ============================================================
-# GET SUBMISSIONS FOR A PARTICULAR PROBLEM
-# ============================================================
-
-def get_problem_submissions(slug):
-
-    query = """
-
-    query submissionList(
-        $offset: Int!,
-        $limit: Int!,
-        $lastKey: String,
-        $questionSlug: String!
-    ) {
-
-        questionSubmissionList(
-
-            offset: $offset,
-
-            limit: $limit,
-
-            lastKey: $lastKey,
-
-            questionSlug: $questionSlug
-
-        ) {
-
-            lastKey
-
-            hasNext
-
-            submissions {
-
-                id
-
-                statusDisplay
-
-                lang
-
-                timestamp
-
-            }
-        }
-    }
-
-    """
-
-
-    variables = {
-
-        "offset":
-            0,
-
-        "limit":
-            20,
-
-        "lastKey":
-            "",
-
-        "questionSlug":
-            slug
-    }
-
-
-    data = graphql(
-
-        query,
-
-        variables,
-
-        "submissionList"
-    )
-
-
-    if not data:
-
-        return []
-
-
-    result = data.get(
-
-        "questionSubmissionList"
-    )
-
-
-    if not result:
-
-        return []
-
-
-    return result.get(
-
-        "submissions",
-
-        []
-    )
-
-
-# ============================================================
 # GET ACTUAL SUBMITTED CODE
 # ============================================================
 
@@ -389,6 +299,8 @@ def get_submission_code(submission_id):
 
             timestamp
 
+            lang
+
             question {
 
                 questionId
@@ -402,7 +314,9 @@ def get_submission_code(submission_id):
                 difficulty
 
             }
+
         }
+
     }
 
     """
@@ -431,7 +345,6 @@ def get_submission_code(submission_id):
 
 
     return data.get(
-
         "submissionDetails"
     )
 
@@ -463,6 +376,7 @@ def get_question_info(slug):
             difficulty
 
         }
+
     }
 
     """
@@ -491,7 +405,6 @@ def get_question_info(slug):
 
 
     return data.get(
-
         "question"
     )
 
@@ -504,7 +417,6 @@ def clean_name(name):
 
     name = name.lower()
 
-
     name = re.sub(
 
         r"[^a-z0-9]+",
@@ -514,9 +426,7 @@ def clean_name(name):
         name
     )
 
-
     name = name.strip("-")
-
 
     return name
 
@@ -609,15 +519,10 @@ def get_extension(language):
 def create_problem_readme(
 
     folder,
-
     number,
-
     title,
-
     difficulty,
-
     language,
-
     slug
 
 ):
@@ -643,10 +548,14 @@ def create_problem_readme(
 
 
 # ============================================================
-# PROCESS ONE PROBLEM
+# PROCESS ONE ACCEPTED PROBLEM
 # ============================================================
 
 def process_problem(recent_submission):
+
+    submission_id = recent_submission.get(
+        "id"
+    )
 
     slug = recent_submission.get(
         "titleSlug"
@@ -657,7 +566,7 @@ def process_problem(recent_submission):
     )
 
 
-    if not slug:
+    if not submission_id or not slug:
 
         return
 
@@ -675,81 +584,17 @@ def process_problem(recent_submission):
         slug
     )
 
-
-    # --------------------------------------------------------
-    # GET SUBMISSIONS
-    # --------------------------------------------------------
-
-    submissions = get_problem_submissions(
-
-        slug
-    )
-
-
-    if not submissions:
-
-        print(
-            "Could not find submissions."
-        )
-
-        return
-
-
-    # --------------------------------------------------------
-    # FIND ACCEPTED SUBMISSION
-    # --------------------------------------------------------
-
-    accepted = None
-
-
-    for submission in submissions:
-
-        if submission.get(
-            "statusDisplay"
-        ) == "Accepted":
-
-            accepted = submission
-
-            break
-
-
-    if not accepted:
-
-        print(
-            "No Accepted submission found."
-        )
-
-        return
-
-
-    submission_id = accepted.get(
-        "id"
-    )
-
-
-    language = accepted.get(
-        "lang",
-        "unknown"
-    )
-
-
     print(
         "Submission ID:",
         submission_id
     )
 
-    print(
-        "Language:",
-        language
-    )
-
 
     # --------------------------------------------------------
-    # GET CODE
+    # GET ACTUAL SUBMISSION DIRECTLY
     # --------------------------------------------------------
 
     details = get_submission_code(
-
         submission_id
     )
 
@@ -763,10 +608,32 @@ def process_problem(recent_submission):
         return
 
 
+    # --------------------------------------------------------
+    # CHECK ACCEPTED
+    # --------------------------------------------------------
+
+    status = details.get(
+        "statusDisplay"
+    )
+
+
+    if status != "Accepted":
+
+        print(
+            "Submission is not Accepted."
+        )
+
+        return
+
+
     code = details.get(
         "code"
     )
 
+    language = details.get(
+        "lang",
+        "unknown"
+    )
 
     question = details.get(
         "question"
@@ -782,6 +649,17 @@ def process_problem(recent_submission):
         return
 
 
+    print(
+        "Status:",
+        status
+    )
+
+    print(
+        "Language:",
+        language
+    )
+
+
     # --------------------------------------------------------
     # QUESTION INFO
     # --------------------------------------------------------
@@ -789,7 +667,6 @@ def process_problem(recent_submission):
     if not question:
 
         question = get_question_info(
-
             slug
         )
 
@@ -861,12 +738,36 @@ def process_problem(recent_submission):
         )
 
 
-    root = Path(
-        "leetcode"
+    # --------------------------------------------------------
+    # GITHUB REPOSITORY
+    # --------------------------------------------------------
+
+    repo_dir = Path(
+        GITHUB_REPO_DIR
     )
 
 
+    if not repo_dir.exists():
+
+        print()
+        print(
+            "GitHub repository directory does not exist:"
+        )
+
+        print(
+            repo_dir
+        )
+
+        return
+
+
+    root = repo_dir / "leetcode"
+
+
     root.mkdir(
+
+        parents=True,
+
         exist_ok=True
     )
 
@@ -887,7 +788,6 @@ def process_problem(recent_submission):
     # --------------------------------------------------------
 
     extension = get_extension(
-
         language
     )
 
@@ -905,6 +805,7 @@ def process_problem(recent_submission):
 
     if solution_file.exists():
 
+        print()
         print(
             "Already exists:"
         )
@@ -928,6 +829,7 @@ def process_problem(recent_submission):
     )
 
 
+    print()
     print(
         "Created:"
     )
@@ -967,6 +869,182 @@ def process_problem(recent_submission):
 
 
 # ============================================================
+# GIT PUSH
+# ============================================================
+
+def git_push(repo_dir):
+
+    print()
+    print("=" * 60)
+    print(
+        "        PUSHING TO GITHUB"
+    )
+    print("=" * 60)
+
+
+    try:
+
+        # ----------------------------------------------------
+        # CHECK GIT REPOSITORY
+        # ----------------------------------------------------
+
+        result = subprocess.run(
+
+            [
+                "git",
+                "rev-parse",
+                "--is-inside-work-tree"
+            ],
+
+            cwd=repo_dir,
+
+            capture_output=True,
+
+            text=True
+        )
+
+
+        if result.returncode != 0:
+
+            print()
+            print(
+                "ERROR:"
+            )
+
+            print(
+                "This folder is not a Git repository."
+            )
+
+            return
+
+
+        # ----------------------------------------------------
+        # CHECK CHANGES
+        # ----------------------------------------------------
+
+        result = subprocess.run(
+
+            [
+                "git",
+                "status",
+                "--porcelain"
+            ],
+
+            cwd=repo_dir,
+
+            capture_output=True,
+
+            text=True
+        )
+
+
+        if not result.stdout.strip():
+
+            print()
+            print(
+                "Nothing new to push."
+            )
+
+            return
+
+
+        # ----------------------------------------------------
+        # GIT ADD
+        # ----------------------------------------------------
+
+        print()
+        print(
+            "Adding files..."
+        )
+
+
+        subprocess.run(
+
+            [
+                "git",
+                "add",
+                "."
+            ],
+
+            cwd=repo_dir,
+
+            check=True
+        )
+
+
+        # ----------------------------------------------------
+        # GIT COMMIT
+        # ----------------------------------------------------
+
+        print(
+            "Creating commit..."
+        )
+
+
+        subprocess.run(
+
+            [
+                "git",
+                "commit",
+                "-m",
+                "Add accepted LeetCode solutions"
+            ],
+
+            cwd=repo_dir,
+
+            check=True
+        )
+
+
+        # ----------------------------------------------------
+        # GIT PUSH
+        # ----------------------------------------------------
+
+        print(
+            "Pushing to GitHub..."
+        )
+
+
+        subprocess.run(
+
+            [
+                "git",
+                "push"
+            ],
+
+            cwd=repo_dir,
+
+            check=True
+        )
+
+
+        print()
+        print(
+            "Successfully pushed to GitHub! ✅"
+        )
+
+
+    except subprocess.CalledProcessError as e:
+
+        print()
+        print(
+            "Git error:"
+        )
+
+        print(e)
+
+
+    except Exception as e:
+
+        print()
+        print(
+            "Unexpected Git error:"
+        )
+
+        print(e)
+
+
+# ============================================================
 # MAIN SYNC FUNCTION
 # ============================================================
 
@@ -974,10 +1052,13 @@ def sync():
 
     print()
     print("=" * 60)
+
     print(
         "        LEETCODE → GITHUB SYNC"
     )
+
     print("=" * 60)
+
     print()
 
 
@@ -1007,13 +1088,48 @@ def sync():
     )
 
 
+    # --------------------------------------------------------
+    # PROCESS SUBMISSIONS
+    # --------------------------------------------------------
+
+    new_solution_found = False
+
+
     for submission in recent:
 
         try:
 
+            before = len(
+                list(
+                    (Path(GITHUB_REPO_DIR) / "leetcode").glob(
+                        "*"
+                    )
+                )
+            ) if (
+                Path(GITHUB_REPO_DIR) / "leetcode"
+            ).exists() else 0
+
+
             process_problem(
                 submission
             )
+
+
+            after = len(
+                list(
+                    (Path(GITHUB_REPO_DIR) / "leetcode").glob(
+                        "*"
+                    )
+                )
+            ) if (
+                Path(GITHUB_REPO_DIR) / "leetcode"
+            ).exists() else 0
+
+
+            if after > before:
+
+                new_solution_found = True
+
 
         except Exception as e:
 
@@ -1029,12 +1145,29 @@ def sync():
             )
 
 
+    # --------------------------------------------------------
+    # PUSH TO GITHUB
+    # --------------------------------------------------------
+
+    repo_dir = Path(
+        GITHUB_REPO_DIR
+    )
+
+
+    git_push(
+        repo_dir
+    )
+
+
     print()
     print("=" * 60)
+
     print(
         "SYNC COMPLETE"
     )
+
     print("=" * 60)
+
     print()
 
 
@@ -1055,14 +1188,18 @@ if __name__ == "__main__":
             "Sync cancelled."
         )
 
+
     except Exception as e:
 
         print()
         print("=" * 60)
+
         print(
             "FATAL ERROR"
         )
+
         print("=" * 60)
+
         print()
 
         print(e)
