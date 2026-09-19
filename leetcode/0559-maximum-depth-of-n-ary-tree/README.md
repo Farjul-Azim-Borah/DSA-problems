@@ -4,19 +4,19 @@
 
 **Language:** cpp
 
-**Runtime:** 16
+**Runtime:** 12
 
-**Memory:** 14476000
+**Memory:** 14452000
 
-**Submission ID:** 2141143295
+**Submission ID:** 2146095900
 
-**Submitted:** 2026-09-14 08:58:44
+**Submitted:** 2026-09-19 01:00:52
 
 ## LeetCode
 
 [View Problem](https://leetcode.com/problems/maximum-depth-of-n-ary-tree/)
 
-[View Submission](https://leetcode.com/problems/maximum-depth-of-n-ary-tree/submissions/2141143295/)
+[View Submission](https://leetcode.com/problems/maximum-depth-of-n-ary-tree/submissions/2146095900/)
 
 ---
 
